@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIT Vellore Smart Shuttle</title>
+    <!-- Tailwind CSS CDN for utility-first styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter for modern typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN for vector icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Leaflet CSS is no longer strictly needed if not using Leaflet, but keeping for completeness if parts of main.js rely on L being defined -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoCcTzM2A6/oO6+J6oG+/z4Q4C2nS1kY9j4uT2g="
+        crossorigin=""/>
+    <!-- Chart.js CDN for Analytics Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <!-- Custom Styles (for VIT colors and scrollbar) - Ensure style.css is in the same directory -->
+    <link rel="stylesheet" href="style.css"> 
+    <style>
+        /* Custom Tailwind colors via JIT compiler. These are defined inline for direct application. */
+        .bg-vit-blue { background-color: #003366; }
+        .text-vit-blue { color: #003366; }
+        .border-vit-blue { border-color: #003366; }
+        .shadow-vit-blue { box-shadow: 0 4px 6px -1px rgba(0, 51, 102, 0.1), 0 2px 4px -1px rgba(0, 51, 102, 0.06); }
+        .bg-vit-gold { background-color: #FFD700; }
+        .text-vit-gold { color: #FFD700; }
+        .hover\:bg-yellow-400:hover { background-color: #facc15; } /* A slightly lighter yellow for hover */
+
+        /* Custom scrollbar styling for better aesthetics */
+        /* For Webkit browsers (Chrome, Safari) */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* For Firefox */
+        html {
+            scrollbar-width: thin;
+            scrollbar-color: #888 #f1f1f1;
+        }
+
+        /* Spinning animation for loading indicator */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+            animation: spin 1.5s linear infinite;
+        }
+
+        /* Custom Leaflet icon styling - still included but not used with iframe map */
+        .shuttle-icon {
+            background-color: #003366; /* VIT Blue */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            border: 2px solid #FFD700; /* VIT Gold border */
+            transform: scale(1); /* Initial scale */
+            transition: transform 0.2s ease-out; /* Smooth transition */
+        }
+        .shuttle-icon:hover {
+            transform: scale(1.1); /* Slightly enlarge on hover */
+        }
+
+        .stop-icon {
+            background-color: #FFD700; /* VIT Gold */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            border: 2px solid #003366; /* VIT Blue border */
+            transform: scale(1); /* Initial scale */
+            transition: transform 0.2s ease-out; /* Smooth transition */
+        }
+        .stop-icon:hover {
+            transform: scale(1.1); /* Slightly enlarge on hover */
+        }
+
+        /* Map container styling for iframe */
+        #map-container { /* This id was previously 'map', but now contains the iframe directly */
+            height: 100%; /* Ensure iframe fills its container */
+            width: 100%;
+            border-radius: 0.75rem; /* rounded-lg */
+            overflow: hidden; /* Ensures iframe content respects border-radius */
+        }
+
+        /* Chart Canvas sizing */
+        .chart-canvas-wrapper {
+            position: relative;
+            height: 100%; /* Ensure it takes height of parent flex item */
+            width: 100%;
+            min-height: 250px; /* Minimum height for charts */
+        }
+
+        /* Responsive canvas styling */
+        #commute-visualization-canvas {
+            width: 100%;
+            height: 400px; /* Or a suitable height, can be adjusted based on content */
+            background-color: #f0f4f8; /* Light background for the map */
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Animation for commute visualization paths */
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -200;
+            }
+        }
+        .animated-path {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 0;
+            animation: dash 5s linear infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-gray-100 text-gray-800 font-inter">
+
+    <!-- Header Section: VIT Vellore Smart Shuttle Title, Desktop Navigation, and Mobile Menu Button -->
+    <header class="bg-vit-blue text-white p-4 shadow-xl rounded-b-xl z-30">
+        <div class="container mx-auto flex justify-between items-center px-4 sm:px-6 lg:px-8">
+            <!-- Application Title and Logo -->
+            <h1 class="text-2xl sm:text-3xl font-bold flex items-center">
+                <img src="https://placehold.co/40x40/FFD700/003366?text=VIT" alt="VIT Logo" class="h-8 w-8 mr-3 rounded-full shadow-lg">
+                VIT Vellore Smart Shuttle
+            </h1>
+            <!-- Desktop Navigation Links and Login/Sign-up Button -->
+            <div class="flex items-center space-x-6"> 
+                <nav class="hidden md:flex space-x-6 text-lg">
+                    <a href="#" class="hover:text-vit-gold transition duration-300 nav-link active" data-view="dashboard-view">Dashboard</a>
+                    <a href="#" class="hover:text-vit-gold transition duration-300 nav-link" data-view="stops-view">Stops</a>
+                    <a href="#" class="hover:text-vit-gold transition duration-300 nav-link" data-view="analytics-view">Analytics</a>
+                    <a href="#" class="hover:text-vit-gold transition duration-300 nav-link" data-view="my-commute-view">My Commute</a>
+                    <a href="#" class="hover:text-vit-gold transition duration-300 nav-link" data-view="book-shuttle-view">Book Shuttle</a>
+                </nav>
+                <!-- Login/Sign-up Button -->
+                <button id="login-button" class="bg-vit-gold text-vit-blue px-4 py-2 rounded-full font-semibold shadow-md hover:bg-yellow-400 transition duration-300">
+                    Login/Sign-up
+                </button>
+            </div>
+            <!-- Mobile Menu Toggle Button (visible only on small screens) -->
+            <button id="mobile-menu-button" class="md:hidden text-white focus:outline-none">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile Menu Overlay: Dims background when mobile menu is open -->
+    <div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden md:hidden"></div>
+    <!-- Mobile Menu Drawer: Slides in from the right -->
+    <nav id="mobile-menu" class="fixed top-0 right-0 w-64 bg-vit-blue h-full shadow-lg z-50 transform translate-x-full transition-transform duration-300 ease-in-out md:hidden">
+        <div class="p-4 text-right">
+            <!-- Close Mobile Menu Button -->
+            <button id="close-mobile-menu" class="text-white focus:outline-none">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <!-- Mobile Navigation Links -->
+        <div class="flex flex-col space-y-4 p-4 text-xl">
+            <a href="#" class="text-white hover:text-vit-gold transition duration-300 mobile-nav-link active" data-view="dashboard-view">Dashboard</a>
+            <a href="#" class="text-white hover:text-vit-gold transition duration-300 mobile-nav-link" data-view="stops-view">Stops</a>
+            <a href="#" class="text-white hover:text-vit-gold transition duration-300 mobile-nav-link" data-view="analytics-view">Analytics</a>
+            <a href="#" class="text-white hover:text-vit-gold transition duration-300 mobile-nav-link" data-view="my-commute-view">My Commute</a>
+            <a href="#" class="hover:text-vit-gold transition duration-300 mobile-nav-link" data-view="book-shuttle-view">Book Shuttle</a>
+        </div>
+    </nav>
+
+    <!-- Main Content Area: Flex-grow to take available space, contains all dynamic views -->
+    <main id="main-content" class="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Dashboard View (Initial View - Always active initially) -->
+        <div id="dashboard-view" class="view active lg:col-span-3 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Panel: Key Stats & Stop Selection -->
+            <section class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col gap-6">
+                <h2 class="text-2xl font-semibold text-vit-blue border-b-2 border-vit-blue pb-3 mb-4">Live Campus Overview</h2>
+                
+                <!-- Info Cards for Active Shuttles and Average Wait Time -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-4 rounded-lg flex items-center shadow-md border border-gray-200 hover:shadow-lg transition duration-200 cursor-pointer">
+                        <i data-lucide="bus" class="text-vit-blue mr-3 w-8 h-8"></i>
+                        <div>
+                            <p class="text-sm text-gray-500">Active Shuttles</p>
+                            <p class="text-2xl font-bold text-vit-blue" id="active-shuttles">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg flex items-center shadow-md border border-gray-200 hover:shadow-lg transition duration-200 cursor-pointer">
+                        <i data-lucide="clock" class="text-vit-blue mr-3 w-8 h-8"></i>
+                        <div>
+                            <p class="text-sm text-gray-500">Avg. Wait Time</p>
+                            <p class="text-2xl font-bold text-vit-blue" id="avg-wait-time">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Upcoming Shuttles (Dashboard Summary) -->
+                <div class="bg-gray-50 p-5 rounded-lg shadow-inner flex flex-col gap-3 border border-gray-200">
+                    <h3 class="text-xl font-medium text-vit-blue mb-2 flex items-center"><i data-lucide="chevrons-right" class="mr-2 w-5 h-5"></i>Next Upcoming Shuttles</h3>
+                    <ul id="dash-next-arrivals-list" class="space-y-2">
+                        <!-- Upcoming shuttle arrivals will be populated by JS -->
+                        <li class="text-center text-gray-500">Loading upcoming shuttles...</li>
+                    </ul>
+                </div>
+
+                <!-- Stop Selection & Predicted Wait Times -->
+                <div class="bg-gray-50 p-5 rounded-lg shadow-inner flex flex-col gap-4 border border-gray-200">
+                    <h3 class="text-xl font-medium text-vit-blue mb-2 flex items-center"><i data-lucide="route" class="mr-2 w-5 h-5"></i>Check Wait Times at Stops</h3>
+                    <select id="shuttle-stop-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm">
+                        <option value="">Select a Stop</option>
+                        <!-- Options will be populated by JS -->
+                    </select>
+                    <div id="selected-stop-info" class="p-3 bg-white border border-gray-200 rounded-lg hidden shadow-sm transition duration-300 ease-in-out">
+                        <p class="text-lg font-semibold text-gray-700" id="stop-name-display"></p>
+                        <p class="text-sm text-gray-500">Predicted Wait Time:</p>
+                        <p class="text-3xl font-bold" id="predicted-wait-time-display">Loading...</p>
+                        <p class="text-sm text-gray-500 mt-2">Current Load:</p>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="h-2.5 rounded-full bg-vit-blue" style="width: 0%" id="current-load-bar"></div>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1" id="current-load-text">Loading...</p>
+                        <button id="book-from-stop-button" class="mt-4 w-full bg-vit-blue text-white py-2 rounded-md hover:bg-blue-800 transition duration-300 font-semibold shadow-md hidden">Book Shuttle from Here</button>
+                    </div>
+                </div>
+                
+                <!-- Quick Links / Announcements -->
+                <div class="bg-gray-50 p-5 rounded-lg shadow-inner flex flex-col gap-3 border border-gray-200">
+                    <h3 class="text-xl font-medium text-vit-blue mb-2 flex items-center"><i data-lucide="megaphone" class="mr-2 w-5 h-5"></i>Announcements</h3>
+                    <p class="text-gray-700 text-sm">⚠️ Due to maintenance, Block C route may experience minor delays today.</p>
+                    <p class="text-gray-700 text-sm">✨ New shuttle service added for Research Park from 5 PM - 7 PM!</p>
+                </div>
+            </section>
+
+            <!-- Right Panel: Campus Map & Shuttle Tracking -->
+            <section class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col relative overflow-hidden">
+                <h2 class="text-2xl font-semibold text-vit-blue border-b-2 border-vit-blue pb-3 mb-4">VIT Vellore Campus Tour</h2>
+                <div id="map-container" class="flex-grow bg-gray-200 rounded-lg relative">
+                    <!-- The VIT Campus Tour will be embedded here -->
+                    <iframe src="https://campustour.vit.ac.in/tour.html" 
+                            class="w-full h-full rounded-lg" 
+                            frameborder="0" 
+                            allowfullscreen>
+                    </iframe>
+                </div>
+            </section>
+        </div>
+
+        <!-- Stops View: Displays a list of all shuttle stops -->
+        <div id="stops-view" class="view hidden lg:col-span-3">
+            <h2 class="text-2xl font-semibold text-vit-blue mb-4 flex items-center"><i data-lucide="map-pin" class="mr-2 w-6 h-6"></i>All Stops & Next Arrivals</h2>
+            <ul class="space-y-4" id="all-stops-list">
+                <!-- Stops will be populated by JS -->
+                <li class="bg-white p-4 rounded-xl shadow-md text-center text-gray-500 border border-gray-200">
+                    <div class="flex items-center justify-center">
+                        <i data-lucide="map-pin" class="text-gray-400 mr-3 w-6 h-6"></i>
+                        <p class="text-lg font-semibold text-gray-800">Loading Stops...</p>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Analytics View: Provides data insights and charts -->
+        <div id="analytics-view" class="view hidden lg:col-span-3">
+            <h2 class="text-2xl font-semibold text-vit-blue mb-6 flex items-center"><i data-lucide="bar-chart-2" class="mr-2 w-6 h-6"></i>Campus Analytics (Data Science Insights)</h2>
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col gap-8">
+                <p class="text-gray-700 text-lg leading-relaxed">Gain deep insights into shuttle demand patterns, route efficiency, and rider behavior through interactive visualizations. Our data science models predict future demand, optimize routes, and improve overall service quality.</p>
+                
+                <!-- Daily Ridership Trends Chart -->
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center"><i data-lucide="trending-up" class="mr-2 w-5 h-5"></i>Daily Ridership Trends</h3>
+                    <div id="ridership-chart-container" class="w-full h-80 bg-gray-50 rounded-lg shadow-inner border border-gray-200 flex items-center justify-center chart-canvas-wrapper">
+                        <canvas id="ridership-chart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2 text-center">Simulated daily ridership for illustrative purposes.</p>
+                </div>
+
+                <!-- Most Popular Stops Chart -->
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center"><i data-lucide="map-pin" class="mr-2 w-5 h-5"></i>Most Popular Stops</h3>
+                    <div id="popularity-chart-container" class="w-full h-80 bg-gray-50 rounded-lg shadow-inner border border-gray-200 flex items-center justify-center chart-canvas-wrapper">
+                        <canvas id="popularity-chart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2 text-center">Simulated popular stops based on ridership.</p>
+                </div>
+
+                <!-- Call to Action/Insight Box -->
+                <div class="bg-blue-50 p-5 rounded-lg text-vit-blue border border-blue-200 shadow-md text-center">
+                    <i data-lucide="lightbulb" class="w-12 h-12 mx-auto mb-3 text-vit-blue"></i>
+                    <p class="text-lg font-medium">Unlock Data-Driven Decisions!</p>
+                    <p class="text-sm mt-1">Our models help optimize fleet management and student convenience.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- My Commute View: Personalized features for users -->
+        <div id="my-commute-view" class="view hidden lg:col-span-3">
+            <h2 class="text-2xl font-semibold text-vit-blue mb-6 flex items-center"><i data-lucide="route" class="mr-2 w-6 h-6"></i>My Commute (Personalized Features)</h2>
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col gap-6 text-gray-700">
+                <p class="text-lg leading-relaxed">Tailor your shuttle experience. Save your frequent routes, set up personalized notifications, and quickly access your most common commute patterns. Make your daily travel seamless and stress-free.</p>
+                
+                <!-- Frequent Routes Section -->
+                <div class="bg-gray-50 p-5 rounded-lg shadow-inner flex flex-col gap-4 border border-gray-200">
+                    <h3 class="text-xl font-medium text-vit-blue flex items-center"><i data-lucide="star" class="mr-2 w-5 h-5"></i>My Frequent Routes</h3>
+                    <div class="flex flex-col md:flex-row gap-3">
+                        <input type="text" id="frequent-route-name" placeholder="Route Nickname (e.g., Home to Library)" class="w-full md:w-1/3 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-vit-blue">
+                        <select id="frequent-route-origin" class="w-full md:w-1/3 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-vit-blue">
+                            <option value="">Select Origin Stop</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                        <select id="frequent-route-destination" class="w-full md:w-1/3 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-vit-blue">
+                            <option value="">Select Destination Stop</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <button id="add-frequent-route" class="w-full bg-vit-blue text-white py-2 rounded-md hover:bg-blue-800 transition duration-300 font-semibold shadow-md">
+                        Add Frequent Route
+                    </button>
+                    <ul id="frequent-routes-list" class="space-y-2 mt-4">
+                        <li class="text-center text-gray-500">No frequent routes added yet.</li>
+                    </ul>
+                    <div id="commute-message-container" class="mt-4 p-3 rounded-md text-center hidden"></div>
+                </div>
+
+                <!-- Commute History Section -->
+                <div class="bg-gray-50 p-5 rounded-lg shadow-inner flex flex-col gap-3 border border-gray-200">
+                    <h3 class="text-xl font-medium text-vit-blue flex items-center"><i data-lucide="history" class="mr-2 w-5 h-5"></i>Recent Commute History</h3>
+                    <ul id="commute-history-list" class="space-y-2">
+                        <!-- History items populated by JS -->
+                        <li class="text-center text-gray-500">Loading commute history...</li>
+                    </ul>
+                </div>
+
+                <!-- AI Campus Info Assistant Button -->
+                <div class="bg-blue-50 p-5 rounded-lg text-vit-blue border border-blue-200 shadow-md text-center hover:shadow-lg transition duration-200 cursor-pointer" id="open-campus-ai-button-card">
+                    <i data-lucide="brain" class="w-12 h-12 mx-auto mb-3 text-vit-blue"></i>
+                    <p class="text-lg font-medium">✨ Campus Info Assistant ✨</p>
+                    <p class="text-sm mt-1 mb-4">Ask anything about the VIT Vellore campus!</p>
+                    <button id="open-campus-ai-button" class="hidden"> <!-- Hidden, click parent card instead -->
+                        Ask AI Assistant
+                    </button>
+                </div>
+
+                <!-- Commute Visualization Section -->
+                <div class="bg-gray-50 p-5 rounded-lg text-center border border-gray-200 shadow-inner">
+                    <i data-lucide="map" class="w-16 h-16 mx-auto mb-4 text-gray-500"></i>
+                    <h3 class="text-xl font-medium mb-2">Visualize Your Daily Path</h3>
+                    <p class="text-sm">See insights into your most common travel times and stops.</p>
+                    <div class="mt-4">
+                        <canvas id="commute-visualization-canvas"></canvas>
+                        <p class="text-xs text-gray-500 mt-2">Simulated commute intensity heatmap (more frequent routes are thicker/darker) with animation.</p>
+                    </div>
+                </div>
+                
+                <!-- Customizable Preferences Call to Action -->
+                <div class="bg-yellow-50 p-5 rounded-lg text-yellow-700 border border-yellow-200 shadow-md text-center hover:shadow-lg transition duration-200 cursor-pointer">
+                    <i data-lucide="settings" class="w-12 h-12 mx-auto mb-3 text-yellow-700"></i>
+                    <p class="text-lg font-medium">Customizable Preferences</p>
+                    <p class="text-sm mt-1">Set your preferred shuttle times, accessibility needs, and more.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Book Shuttle View: Form for booking a shuttle ride -->
+        <div id="book-shuttle-view" class="view hidden lg:col-span-3">
+            <h2 class="text-2xl font-semibold text-vit-blue mb-4 flex items-center"><i data-lucide="ticket" class="mr-2 w-6 h-6"></i>Book Your Shuttle Ride</h2>
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col gap-6">
+                <form id="book-shuttle-form" class="space-y-4">
+                    <div>
+                        <label for="booking-name" class="block text-sm font-medium text-gray-700 mb-1">Your Name:</label>
+                        <input type="text" id="booking-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" placeholder="Enter your name" required>
+                    </div>
+                    <div>
+                        <label for="booking-phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number:</label>
+                        <input type="tel" id="booking-phone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" placeholder="e.g., +919876543210" required>
+                    </div>
+                    <div>
+                        <label for="booking-stop-select" class="block text-sm font-medium text-gray-700 mb-1">Select Pickup Stop:</label>
+                        <select id="booking-stop-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" required>
+                            <option value="">Select a Stop</option>
+                            <!-- Options will be populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="booking-date" class="block text-sm font-medium text-gray-700 mb-1">Date:</label>
+                        <input type="date" id="booking-date" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" required>
+                    </div>
+                    <div>
+                        <label for="booking-time" class="block text-sm font-medium text-gray-700 mb-1">Preferred Time:</label>
+                        <input type="time" id="booking-time" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" required>
+                    </div>
+                    <div>
+                        <label for="booking-passengers" class="block text-sm font-medium text-gray-700 mb-1">Number of Passengers:</label>
+                        <input type="number" id="booking-passengers" min="1" value="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" required>
+                    </div>
+                    <button type="submit" class="w-full bg-vit-blue text-white py-3 rounded-md hover:bg-blue-800 transition duration-300 font-semibold shadow-md">Book Shuttle</button>
+                </form>
+                
+                <div id="booking-message" class="mt-4 p-3 rounded-md text-center hidden"></div>
+
+                <h3 class="text-xl font-semibold text-vit-blue border-b-2 border-vit-blue pb-3 mb-4 mt-6">My Bookings (<span id="user-id-display">Loading User ID...</span>)</h3>
+                <ul id="my-bookings-list" class="space-y-3">
+                    <li class="text-center text-gray-500">Loading bookings...</li>
+                </ul>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Login/Sign-up Modal: Hidden by default, shown on login button click -->
+    <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full mx-4 relative">
+            <!-- Close button for the modal -->
+            <button id="close-auth-modal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h2 class="text-2xl font-bold text-vit-blue mb-6 text-center">Login or Sign-up</h2>
+            
+            <form id="phone-auth-form" class="space-y-4">
+                <!-- Name input for registration/profile update -->
+                <div>
+                    <label for="auth-name" class="block text-sm font-medium text-gray-700 mb-1">Your Name (Optional for existing, required for new):</label>
+                    <input type="text" id="auth-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200" placeholder="Enter your full name">
+                </div>
+                
+                <div>
+                    <label for="phone-input" class="block text-sm font-medium text-gray-700 mb-1">Phone Number:</label>
+                    <input type="tel" id="phone-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200" placeholder="e.g., +919876543210">
+                </div>
+                
+                <button type="button" id="send-otp-button" class="w-full bg-vit-blue text-white py-3 rounded-md hover:bg-blue-800 transition duration-300 font-semibold shadow-md">
+                    Send OTP
+                </button>
+                
+                <div id="otp-section" class="space-y-4 hidden">
+                    <div>
+                        <label for="otp-input" class="block text-sm font-medium text-gray-700 mb-1">Verification Code (OTP):</label>
+                        <input type="text" id="otp-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200" placeholder="Enter 6-digit OTP">
+                    </div>
+                    <button type="button" id="verify-otp-button" class="w-full bg-green-600 text-white py-3 rounded-md hover:bg-green-700 transition duration-300 font-semibold shadow-md">
+                        Verify OTP & Login
+                    </button>
+                </div>
+                
+                <div id="recaptcha-container" class="mt-4"></div>
+                
+                <div id="auth-message" class="mt-4 p-3 rounded-md text-center hidden"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Campus AI Assistant Modal -->
+    <div id="campus-ai-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-xl w-full mx-4 relative">
+            <button id="close-campus-ai-modal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h2 class="text-2xl font-bold text-vit-blue mb-6 text-center">✨ Campus Info Assistant ✨</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="campus-ai-question" class="block text-sm font-medium text-gray-700 mb-1">Ask a question about VIT Vellore campus:</label>
+                    <textarea id="campus-ai-question" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vit-blue focus:border-transparent transition duration-200 shadow-sm" placeholder="e.g., Where is the library located? What are the dining options?"></textarea>
+                </div>
+                
+                <button type="button" id="get-campus-ai-answer-button" class="w-full bg-vit-blue text-white py-3 rounded-md hover:bg-blue-800 transition duration-300 font-semibold shadow-md flex items-center justify-center">
+                    <span id="ai-loading-spinner" class="hidden mr-2">
+                        <svg class="animate-spin-slow h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
+                    <span id="ai-button-text">Get Answer</span>
+                </button>
+                
+                <div id="campus-ai-answer" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 text-gray-800 leading-relaxed min-h-[100px] max-h-[300px] overflow-y-auto">
+                    <p class="text-gray-500">Your answer will appear here...</p>
+                </div>
+                <div id="campus-ai-message" class="mt-4 p-3 rounded-md text-center hidden"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Footer Section -->
+    <footer class="bg-gray-800 text-white text-center p-4 mt-6 rounded-t-lg">
+        <p class="text-sm">&copy; <span id="current-year"></span> VIT Vellore Smart Shuttle. Project by <span id="project-author-name">Swapnil</span>.</p>
+    </footer>
+
+    <!-- Eel.js must be loaded first for Python-JS communication -->
+    <script type="text/javascript" src="/eel.js"></script>
+
+    <!-- Firebase SDKs - Loaded as modules -->
+    <script type="module">
+        // Import and expose Firebase functions globally for use in main.js
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, deleteDoc, doc, onSnapshot, setDoc, getDoc, orderBy as firestoreOrderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose Firebase functions to the global window object
+        window.initializeApp = initializeApp;
+        window.getAuth = getAuth;
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.RecaptchaVerifier = RecaptchaVerifier;
+        window.signInWithPhoneNumber = signInWithPhoneNumber;
+        window.getFirestore = getFirestore;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDocs = getDocs;
+        window.query = query;
+        window.where = where;
+        window.firestoreOrderBy = firestoreOrderBy; 
+        window.deleteDoc = deleteDoc;
+        window.doc = doc;
+        window.onSnapshot = onSnapshot;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+        window.signOut = signOut;
+    </script>
+    
+    <!-- Leaflet JS - Still included, but its map initialization will be skipped if map div is not present -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjGwZNAWRhlCQWJTHcaSs4fKV3EzkA="
+        crossorigin=""></script>
+
+    <!-- Your custom JavaScript. Defer loading to ensure DOM and other scripts are ready. -->
+    <script type="text/javascript" src="main.js" defer></script>
+    <script>
+        // Initial call to create Lucide icons for icons present on initial load
+        // This should run after all HTML content is parsed.
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

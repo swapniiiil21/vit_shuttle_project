@@ -1,0 +1,151 @@
+/* www/style.css */
+
+/* Google Fonts - Inter is loaded via HTML, but defining font-family here for consistency */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f0f2f5; /* Light gray background for the whole page */
+}
+
+/* Define custom Tailwind colors using CSS variables (will be picked up by inline style tag for Tailwind JIT) */
+:root {
+    --color-vit-blue: #003366; /* Deep Blue */
+    --color-vit-gold: #FFD700; /* Gold/Yellow */
+    --color-shadow-vit-blue: rgba(0, 51, 102, 0.2); /* Stronger shadow for blue elements */
+}
+
+/* Custom scrollbar for main content area for better aesthetics */
+#main-content {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;    /* Firefox */
+    overflow-y: auto; /* Enable scrolling */
+}
+
+#main-content::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+/* Enhanced active state for navigation links */
+.nav-link.active, .mobile-nav-link.active {
+    position: relative;
+    color: var(--color-vit-gold); /* Active link color */
+    font-weight: 600; /* Semi-bold */
+}
+
+.nav-link.active::after, .mobile-nav-link.active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -8px; /* Adjust based on padding/margin */
+    height: 3px;
+    background-color: var(--color-vit-gold);
+    border-radius: 9999px; /* Fully rounded */
+    transform: scaleX(1);
+    transition: transform 0.3s ease-out;
+}
+
+/* Custom shadow for important cards and elements */
+.shadow-vit-blue {
+    box-shadow: 0 10px 20px -5px var(--color-shadow-vit-blue);
+}
+
+/* Styling for the SVG charts in Analytics */
+#ridership-chart-container,
+#popularity-chart-container {
+    width: 100%;
+    height: 400px; /* Fixed height for charts */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #fdfdfd; /* Off-white background for charts */
+    border-radius: 0.75rem; /* rounded-xl */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+    overflow: hidden; /* Ensure SVG doesn't overflow */
+}
+
+/* Style for the SVG elements within charts */
+.chart-bar {
+    fill: var(--color-vit-blue); /* Default bar color */
+    transition: fill 0.3s ease; /* Smooth transition on hover */
+}
+
+.chart-bar:hover {
+    fill: var(--color-vit-gold); /* Hover color for bars */
+}
+
+.chart-label {
+    font-size: 12px;
+    fill: #666; /* Dark gray for labels */
+}
+
+.chart-axis-line {
+    stroke: #ccc; /* Light gray for axis lines */
+    stroke-width: 1px;
+}
+
+/* Specific styling for the modal overlay and content */
+#auth-modal .bg-opacity-75 {
+    backdrop-filter: blur(5px); /* Add blur effect to modal background */
+}
+
+#auth-modal > div {
+    animation: fadeInScale 0.3s ease-out forwards; /* Simple animation for modal */
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Leaflet Map specific styling */
+#map-container {
+    height: 500px; /* Give the map a fixed height */
+    width: 100%;
+    border-radius: 0.75rem; /* rounded-xl */
+    overflow: hidden; /* Ensure map tiles don't overflow corners */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+    z-index: 1; /* Ensure it's above other elements if needed */
+}
+
+/* Custom icon styling for shuttles and stops on Leaflet map */
+.shuttle-icon {
+    background-color: var(--color-vit-blue);
+    color: white;
+    border-radius: 50%;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem; /* Equivalent to text-xl for icons */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    border: 2px solid var(--color-vit-gold);
+    width: 40px; /* Fixed size for consistency */
+    height: 40px;
+}
+
+.stop-icon {
+    background-color: white;
+    color: var(--color-vit-blue);
+    border-radius: 50%;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem; /* Equivalent to text-lg for icons */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    border: 2px solid var(--color-vit-blue);
+    width: 32px; /* Fixed size for consistency */
+    height: 32px;
+}
+
+/* Ensure Lucide icons within custom Leaflet markers are styled correctly */
+.shuttle-icon svg, .stop-icon svg {
+    width: 100%;
+    height: 100%;
+}
